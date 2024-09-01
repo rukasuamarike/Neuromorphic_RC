@@ -1,0 +1,134 @@
+Biolek Memcapacitive Model - C4
+********************************************************************************
+* D. Biolek, M. Di Ventra, and Y. V. Pershin, "Reliable SPICE simulations of
+*       memristors, memcapacitors and meminductors," Radioengineering, vol. 22,
+*       no. 4, pp. 945–968, 2013.
+********************************************************************************
+* memcapacitor bipolar with threshold model - C4 model a
+********************************************************************************
+.SUBCKT MemCap m n PARAMS: xinit=0.0
+
+********************************************************************************
+* constants of the model
+********************************************************************************
+.PARAMS Cmin=1p Cmax=100p Beta=70u Vth=0.8 b1=10m b2=10u
+.PARAM Cinit    = {Cmin + xinit * (Cmax - Cmin)}
+
+********************************************************************************
+.PARAM RVal     = 100e6
+.PARAM CVal     = 1
+
+********************************************************************************
+* initial voltages
+********************************************************************************
+.IC V(x) = Cinit
+
+********************************************************************************
+* add a very large resistor for DC path
+********************************************************************************
+RBias   m   n  1e50
+
+********************************************************************************
+* integrator - x is the value of capacitance
+* Use TERNARY_FCN(x, y, x) for ngspice and IF(x, y, z) for other Pspice versions
+********************************************************************************
+Cx      x     0   {CVal} IC = Cinit
+Rx      x     0   {RVal}
+Gx      0     x   value = {TERNARY_FCN(abs(V(m, n)) < Vth, 0.0,
++                               fs(V(m, n), b1) * ws(V(x), V(m, n)))}
+
+********************************************************************************
+* charge computation
+********************************************************************************
+Rq      Q     0   {RVal}
+Eq      Q     0   value = {V(x) * V(m, n)}
+
+********************************************************************************
+* differentiator - to calculate ddt(V(Q))
+********************************************************************************
+Cdt     d     0   {CVal}
+Rdt     d     0   {RVal}
+Edt     d     0   value = {V(x) * V(m, n)}
+
+********************************************************************************
+* memcapcitive port using differentiator
+********************************************************************************
+Gmc  m n  value = {-I(Edt)}
+
+********************************************************************************
+* functions for this module
+********************************************************************************
+.FUNC stps(x, b)    {1 / (1 + exp(-x/b))}
+.FUNC abss(x, b)    {x * (stps(x, b) - stps(-x, b))}
+.FUNC fs(v, b)      {Beta * (v - 0.5 * (abss(v + Vth, b) - abss(v - Vth, b)))}
+.FUNC ws(x, v)      {stps(v, b1) * stps(1 -x/Cmax, b2) + stps(-v, b1) *
++       stps(x/Cmin - 1, b2)}
+
+********************************************************************************
+.ENDS MemCap
+
+********************************************************************************
+********************* Parameters for Signal Source(s) **************************
+********************************************************************************
+* SINE    : V1 1 0 DC 0 SIN(OFF AMPL FREQ TD THETA)
+* PULSE   : V1 1 0 DC 0 PULSE(VLO VHI TD TR TF PW PER)
+* DC      : V1 1 0 1.2 DC
+* TRIANGLE: V1 1 0 DC 0 PULSE(VLO VHI TD TR TF PW PER)
+* SQUARE  : V1 1 0 DC 0 PULSE(VLO VHI TD TR TF PW PER)
+********************************************************************************
+* V1: Sine, ampl = 1.6, freq = 50000, off = 0
+********************************************************************************
+.PARAM  Vampl = 1.5
+.PARAM  Freq  = 50e3
+********************************************************************************
+V1        i1    0 DC 0 SIN(0 {Vampl} {Freq})
+
+********************************************************************************
+********************* General Options for Xyce *********************************
+********************************************************************************
+* AztecOO should be the linear solver for parallel. However, AztecOO doesn't
+* work at this point. KLU is selected for linear solver instead. The new version
+* of trillinos (11.12.1) seems to fix the problem. Use AztecOO as default linear
+* solver. Method of Gear is to fix the problem with exceeding limits. This
+* problem is associated with spiking input sources.
+********************************************************************************
+.OPTIONS LINSOL TYPE=KLU
+
+********************************************************************************
+******************* Parameters for transient analysis **************************
+********************************************************************************
+* Analysis type         : Transient Analysis
+* Time Step             : 0.01us
+* Number of Simulations : 2000
+* Start Transient Time  : 0us
+* Stop Transient Time   : 20us (Time Step * Number of Simulation)
+* Transient Option      : .TRAN TSTEP TSTOP  <TSTART <TMAX(step)> > <UIC>
+********************************************************************************
+.TRAN 10ns 20us 0 10ns
+
+********************************************************************************
+************************ Network Connection ************************************
+********************************************************************************
+* Network Type          : Crossbar
+* Rows (inputs)         : 1
+* Columns (outputs)     : 1
+* Number of Modules     : 1 (X is the memcapacitor subcircuit)
+********************************************************************************
+X0      i1   0    MemCap
+
+********************************************************************************
+********************** Measurements for analysis *******************************
+********************************************************************************
+* Measurement Type      : SAVE
+* Measurement Interval  : from 0us to 20us
+* Measured Elements     : V(i1) V(X0:Q) V(X0:x)
+********************************************************************************
+.CONTROL
+SET wr_singlescale
+SET wr_vecnames
+OPTION numdgt =7
+RUN
+WRDATA BiolekMemCap.csv V(i1) V(X0.Q) V(X0.x)
+.ENDC
+********************************************************************************
+.END

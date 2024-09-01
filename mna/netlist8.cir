@@ -1,0 +1,13 @@
+V1  1 0        ; Voltage source
+M1  1 2         ; Memristor
+
+* Model definition (This is an example VTEAM model)
+.MODEL VTEAM MEMRISTOR (level=2, Alpha_on=3, Alpha_off=3, 
+                         K_on=-2.2e-4, K_off=2.49e-6, 
+                         Vt_on=-0.15, Vt_off=0.16, 
+                         R_on=387, R_off=1069.5, D=10e-9)
+
+* Voltage source
+V1 DC 1V        ; DC voltage source with 1V
+
+.end

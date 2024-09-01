@@ -1,0 +1,117 @@
+Biolek memristive model - R1
+
+********************************************************************************
+*************** the sub circuit for the memristor model ************************
+********************************************************************************
+********************************************************************************
+* D. Biolek, M. Di Ventra, and Y. V. Pershin, "Reliable SPICE simulations of
+*       memristors, memcapacitors and meminductors," Radioengineering, vol. 22,
+*       no. 4, pp. 945–968, 2013.
+********************************************************************************
+* ideal memristor model R1
+********************************************************************************
+* Connections:
+* 1 - top electrode
+* 2 - bottom electrode
+* x - External connection to plot state variable that is not used otherwise
+********************************************************************************
+.SUBCKT MemRes m n
+********************************************************************************
+* Constants for the model
+* Ron = 100, Roff = 100e3, Rini = 5e3
+* uv  =  10e-15, D = 10e-9
+********************************************************************************
+.PARAMS Ron=100 Roff=100e3 Rini=5e3 uv=10e-15 D=10e-9
+.PARAMS a={(Rini-Ron)/(Roff-Ron)}
+.PARAMS k={uv*Ron/(D**2)}
+
+********************************************************************************
+* control function
+********************************************************************************
+.FUNC FEq(q)  {(Ron - Roff)/(a*exp(-4*k*q) + 1)}
+
+********************************************************************************
+* dependent voltage source for memristor IV response
+********************************************************************************
+Rm l m {Roff}
+Eq m n value = {FEq(V(q))}
+
+********************************************************************************
+* the state variable q(t)
+* dq/dt = i
+********************************************************************************
+Cx  q 0 {1}
+Gq  0 q value = {i(Eq)}
+Rau q 0 {100e3}
+
+********************************************************************************
+.ENDS MemRes
+
+********************************************************************************
+********************* Parameters for Signal Source(s) **************************
+********************************************************************************
+* SINE    : V1 1 0 DC 0 SIN(OFF AMPL FREQ TD THETA)
+* PULSE   : V1 1 0 DC 0 PULSE(VLO VHI TD TR TF PW PER)
+* DC      : V1 1 0 1.2 DC
+* TRIANGLE: V1 1 0 DC 0 PULSE(VLO VHI TD TR TF PW PER)
+* SQUARE  : V1 1 0 DC 0 PULSE(VLO VHI TD TR TF PW PER)
+********************************************************************************
+* V1: Sine, ampl = 0.5, freq = 100, off = 0
+********************************************************************************
+.PARAM  Vampl = 1.0
+.PARAM  Freq  = 1.0
+********************************************************************************
+V1        i1    0 DC 0 SIN(0 {Vampl} {Freq})
+
+********************************************************************************
+********************* General Options for Xyce *********************************
+********************************************************************************
+* AztecOO is the default linear solver for parallel execution. However, AztecOO
+* doesn't work at this point. KLU is selected for linear solver instead. It is
+* serial execution. Method of Gear is to fix the problem with exceeding limits.
+********************************************************************************
+.OPTIONS LINSOL TYPE=KLU
+*.OPTIONS TIMEINT METHOD=GEAR
+
+********************************************************************************
+******************* Parameters for transient analysis **************************
+********************************************************************************
+* Analysis type         : Transient Analysis
+* Time Step             : 1us
+* Number of Simulations : 10000
+* Start Transient Time  : 0us
+* Stop Transient Time   : 10000us (Time Step * Number of Simulation)
+* Transient Option      : .TRAN TSTEP TSTOP  <TSTART <TMAX(step)> > <UIC>
+********************************************************************************
+.TRAN 1us 10ms 0us 1us
+
+********************************************************************************
+************************ Network Connection ************************************
+********************************************************************************
+* Network Type          : Crossbar
+* Rows (inputs)         : 1
+* Columns (outputs)     : 1
+* Number of Modules     : 1 (X is the memristor subcircuit)
+********************************************************************************
+X0  i1  0    MemRes
+
+********************************************************************************
+********************** Measurements for analysis *******************************
+********************************************************************************
+* Measurement Type      : SAVE
+* Measurement Interval  : from 0s to 10s
+* Measured Elements     : V(i1)
+* Measured Elements     : I(V1)
+********************************************************************************
+* the following controls are specifically for ngspice. Other Pspice version can
+* have different sets of controls.
+********************************************************************************
+.CONTROL
+SET wr_singlescale
+SET wr_vecnames
+OPTION numdgt =7
+RUN
+WRDATA BiolekMemRes.csv V(i1) I(V1) V(X0.q)
+.ENDC
+********************************************************************************
+.END

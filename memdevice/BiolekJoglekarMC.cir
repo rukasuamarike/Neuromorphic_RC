@@ -1,0 +1,104 @@
+Biolek with Joglekar Window
+********************************************************************************
+* Biolek, Dalibor, Zdenek Biolek, and Viera Biolkova. "SPICE modelling of
+*     memcapacitor." Electronics letters 46.7 (2010): 520.
+********************************************************************************
+.SUBCKT MemC Plus Minus PARAMS:
++ Cmin=10nF Cmax=10uF Cinit=100nF k=10meg p=1 IC=0
+********************************************************************************
+******* Input port
+********************************************************************************
+Emc Plus Minus value={DM(v(x))*(v(q) + IC*Cinit)}
+********************************************************************************
+******* Charge computation. Int1 from Fig. 1 is formed by Cq and Gq
+********************************************************************************
+Gq 0 q value = {I(Emc)}
+Cq q 0 1
+Rq q 0 1G
+********************************************************************************
+******* State-space equation (4). Int2 from Fig. 1 is formed by Cx and Gx
+********************************************************************************
+.PARAM xinit={(1/Cinit-1/Cmax)/(1/Cmin-1/Cmax)}
+********************************************************************************
+.IC V(x)={xinit}
+Gx 0 x value={v(q)*k*WinFunc(v(x),p)}
+Cx x 0 {1}
+Rx x 0 1G
+********************************************************************************
+.FUNC DM(x)         {1/Cmax + (1/Cmin-1/Cmax)*x}
+.FUNC WinFunc(x,p)  {1- (2*x-1) ** (2*p)}
+********************************************************************************
+.ENDS MemC
+
+********************************************************************************
+********************* Parameters for Signal Source(s) **************************
+********************************************************************************
+* SINE    : V1 1 0 DC 0 SIN(OFF AMPL FREQ TD THETA)
+* PULSE   : V1 1 0 DC 0 PULSE(VLO VHI TD TR TF PW PER)
+* DC      : V1 1 0 1.2 DC
+* TRIANGLE: V1 1 0 DC 0 PULSE(VLO VHI TD TR TF PW PER)
+* SQUARE  : V1 1 0 DC 0 PULSE(VLO VHI TD TR TF PW PER)
+********************************************************************************
+* V1: Sine, ampl = 2.0, freq = 1, off = 0
+********************************************************************************
+.PARAM  Vampl = 2.0
+.PARAM  Freq  = 1.0
+********************************************************************************
+V1 1  0 SIN(0 {Vampl} {Freq})
+
+********************************************************************************
+********************* General Options for ngspice ******************************
+********************************************************************************
+* AztecOO is the default linear solver for parallel execution. However, AztecOO
+* doesn't work at this point. KLU is selected for linear solver instead. It is
+* serial execution. Method of Gear is to fix the problem with exceeding limits.
+********************************************************************************
+*.OPTIONS LINSOL TYPE=KLU
+*.OPTIONS TIMEINT METHOD=GEAR
+*.OPTIONS METHOD=GEAR
+
+********************************************************************************
+******************* Parameters for transient analysis **************************
+********************************************************************************
+* Analysis type         : Transient Analysis
+* Time Step             : 1us
+* Number of Simulations : 10000
+* Start Transient Time  : 0us
+* Stop Transient Time   : 10000us (Time Step * Number of Simulation)
+* Transient Option      : .TRAN TSTEP TSTOP  <TSTART <TMAX(step)> > <UIC>
+********************************************************************************
+*.TRAN 0.1ms 2 0m 2ms
+.TRAN 0.1ms 2
+
+********************************************************************************
+************************ Network Connection ************************************
+********************************************************************************
+* Network Type          : Crossbar
+* Rows (inputs)         : 1
+* Columns (outputs)     : 1
+* Number of Modules     : 1 (X is the memcapacitor subcircuit)
+********************************************************************************
+X0  1  0  MemC
+
+********************************************************************************
+********************** Measurements for analysis *******************************
+********************************************************************************
+* Measurement Type      : SAVE
+* Measurement Interval  : from 0s to 10s
+* Measured Elements     : V(1)
+* Measured Elements     : I(V1)
+********************************************************************************
+* the following controls are specifically for ngspice. Other Pspice version can
+* have different sets of controls.
+********************************************************************************
+.CONTROL
+SET wr_singlescale
+SET wr_vecnames
+OPTION numdgt=7
+*option klu
+RUN
+WRDATA BiolekJoglekarMC.csv V(1) I(V1) V(X0.q)
+*plot x0.q vs V(1) retraceplot
+.ENDC
+********************************************************************************
+.END

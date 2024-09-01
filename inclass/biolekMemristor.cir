@@ -1,0 +1,80 @@
+
+
+
+
+
+
+.SUBCKT MemRistor p n
+
+* constants
+.PARAMS Ron=100 Roff=10k Rini={(Ron+Roff)/2.0} uv=10f D=10n
+.PARAMS a={(Rini-Ron)/(Roff-Rini)}
+.PARAMS k={uv*Ron/(D**2)}
+
+.FUNC Rm(q) {(Ron-Roff)/(a*exp(-4*k*q)+1)}
+
+* the state variable q(t)
+* dq/dt = i
+
+
+.FUNC Gq(i) {}
+
+Cx q 0 {1}
+* take current going thru source i(source)
+Gq 0 q value = {i(Em)} 
+* add a fat resistor to prevent the model from having a floating node/ overload
+Rau q 0 {100e6}
+
+
+* dependent voltage source for memristor IV response
+* voltage measurement at M
+Rs p m {Roff}
+Em m n value = {Rm(V(q))*i(Em)}
+
+
+
+
+.ENDS MemRistor
+
+
+* SINE    : V1 1 0 DC 0 SIN(OFF AMPL FREQ TD THETA)
+* PULSE   : V1 1 0 DC 0 PULSE(VLO VHI TD TR TF PW PER)
+* DC      : V1 1 0 1.2 DC
+* TRIANGLE: V1 1 0 DC 0 PULSE(VLO VHI TD TR TF PW PER)
+* SQUARE  : V1 1 0 DC 0 PULSE(VLO VHI TD TR TF PW PER)
+
+.PARAM Vampl = 0.5
+.PARAM Freq = 1.0
+
+
+V1 i1 0 SIN(0 {Vampl} {Freq})
+
+
+
+* time step         :       1us
+* num simulation    :       2
+* start time        :       0ms
+* stop time         :       2ms
+* option
+.TRAN 0.1ms 2 0m 2ms
+
+
+* Network Type          : Crossbar
+* Rows (inputs)         : 1
+* Columns (outputs)     : 1
+* Number of Modules     : 1 (X is the memristor subcircuit)
+
+X0 i1 0 MemRistor
+
+
+
+.CONTROL 
+SET wr_singlescale 
+SET wr_vecnames 
+OPTION numdgt =7 
+RUN 
+WRDATA BiolekMemRistor.csv V(i1) I(V1) V(x0.q)
+V(X0.x) 
+.ENDC
+
+.END
